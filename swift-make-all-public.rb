@@ -32,12 +32,59 @@ end
 
 def swift_make_all_public(filename, replace)
 	File.open('temp.swift', 'w') do |file|
+		scope = ''
+		is_commented = false
+		bracket = 0
 		File.open(filename, 'rb').each do |line|
+			# puts scope
 			# struct, class, static, protocol, or extension starts with whitespaces, without // or /* in front
 			# 	struct/class/extension definition
 			# 	static/class var/func
-			if line =~ /^(?!\/(\/|\*))(\s)*((struct|class|static|protocol|extension|func|mutating|subscript|@IBOutlet|@IBAction|override|enum)(\s)+(?!public)|(var)(\s)+(?!public).*{)/
-				# puts line
+
+			is_commented = (line.include? '/*') if !is_commented
+			is_commented = !(line.include? '*/') if is_commented
+			line_without_comment = line
+			line_without_comment = line.slice(0..line.index('//')) if line.include? '//'
+			if (line.include? '/*') && (line.include? '*/')
+				line_without_comment = line.slice(line.index('/*')..line.index('*/'))
+			elsif line.include? '/*'
+				line_without_comment = line.slice(0..line.index('/*'))
+			elsif line.include? '*/'
+				line_without_comment = line.slice(line.index('*/')..-1)
+			end
+
+			if is_commented
+				file.puts line
+				next
+			end
+
+			# detect scope
+			if line =~ /^((\s)*public(\s)+)?class/
+				scope = 'class'
+			elsif line =~ /^((\s)*public(\s)+)?protocol/
+				scope = 'protocol'
+			end
+			if line =~ /^(?!\/(\/|\*))(\s)*/
+				bracket += line.scan('{').length
+				bracket -= line.scan('}').length
+			end
+			scope = '' if bracket == 0
+			# puts scope
+			# puts bracket
+
+			regex = '^(?!\/(\/|\*))(\s)*((struct|class|static|protocol|extension|func|mutating|subscript|@IBOutlet|@IBAction|override|enum|required)(\s)+(?!public)|(var)(\s)+(?!public).*{'
+			# regex = '^(?!\/(\/|\*))(\s)*((struct|class|static|protocol|extension|func|mutating|subscript|@IBOutlet|@IBAction|override|enum|required)(\s)+(?!public)'
+			if scope == 'protocol'
+				regex = '^(\s)*protocol(\s)+(?!public)'
+			elsif scope == 'class' && bracket == 1
+				regex += '|(var|let)(\s)+(?!public))'
+			else
+				regex += ')'
+			end
+			regex = /#{regex}/
+			# puts regex
+
+			if line_without_comment =~ regex
 				s = line.strip.sub('@IBAction', '').sub('@IBOutlet', '').strip
 				s = line.sub(s, 'public ' + s)
 				file.puts s

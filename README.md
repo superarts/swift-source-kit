@@ -12,18 +12,3 @@ Usage: swift-make-all-public.rb [options]
     -n, --not-replace                Input filename
     -h, --help                       Prints this help
 ```
-
-The concept is quite simple:
-
-```
-if line =~ /^(?!\/(\/|\*))(\s)*((struct|class|static|protocol|extension|func|mutating|subscript|@IBOutlet|@IBAction|override|enum)(\s)+(?!public)|(var)(\s)+(?!public).*{)/
-	s = line.strip.sub('@IBAction', '').sub('@IBOutlet', '').strip
-	s = line.sub(s, 'public ' + s)
-	...
-```
-
-TODO:
-
-- add scope check for classes and protocols
-- Make class variables public
-- Don't make protocol functions public
