@@ -10,7 +10,7 @@ options = OptionParser.new do |opts|
 	opts.on("-i", "--input-filename=NAME", "Input filename") do |name|
 		filename = name
 	end
-	opts.on("-n", "--not-replace", "Input filename") do |name|
+	opts.on("-n", "--no-replace", "Input filename") do |name|
 		replace = false
 	end
 	opts.on("-h", "--help", "Prints this help") do
