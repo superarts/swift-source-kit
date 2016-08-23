@@ -12,3 +12,9 @@ Usage: swift-make-all-public.rb [options]
     -n, --not-replace                Input filename
     -h, --help                       Prints this help
 ```
+
+## Logs
+
+- 0.1.2: testing
+- 0.1.1: testing
+- 0.1.0: initial release
