@@ -4,15 +4,15 @@ require 'optparse'
 require 'set'
 
 filename = ''
-replace = true
+destname = ''
 options = OptionParser.new do |opts|
 	opts.banner = "Usage: swift-make-all-public.rb [options]"
 
 	opts.on("-i", "--input-filename=NAME", "Input filename") do |name|
 		filename = name
 	end
-	opts.on("-n", "--no-replace", "Input filename") do |name|
-		replace = false
+	opts.on("-o", "--output-filename=DESTNAME", "Output filename") do |name|
+		destname = name
 	end
 	opts.on("-h", "--help", "Prints this help") do
 		puts opts
@@ -21,8 +21,8 @@ options = OptionParser.new do |opts|
 end
 
 options.parse!
-if filename == ''
-	puts "Missing filename.\n---\n"
+if filename == '' || destname == ''
+	puts "Missing input or output filename.\n---\n"
 	puts options
 	exit
 end
@@ -31,8 +31,9 @@ end
 # s = IO.read("/Users/leo/prj/ios/LFramework2/Pod/Classes/LFoundation/LFoundation.swift")
 # puts s
 
-def swift_wrap_underscore(filename, replace)
-	File.open('temp.swift', 'w') do |file|
+def swift_wrap_underscore(filename)
+	File.open('temp.swift', 'a') do |file|
+		file.puts "// #{filename} {"
 		scope = ''
 		is_commented = false
 		bracket = 0
@@ -129,8 +130,9 @@ def swift_wrap_underscore(filename, replace)
 				if symbol[:parent] == class_name
 					puts symbol
 					if symbol[:scope] == 'class'
-						# public var xxx...
+						# public var name_1: Type = value
 						if match_var = symbol[:line].match(/(public\s+.*\s*var\s+(?!_)([\w\d_]+))/)
+							next if !match_var.captures[1].include? '_'
 							type = 'XXX'
 							if match = symbol[:line].match(/(public\s+.*\s*var\s+(?!_)([\w\d_]+))(:.*)(=.*)/)
 								# p match.captures
@@ -144,16 +146,59 @@ def swift_wrap_underscore(filename, replace)
 								type = ': Bool' if (type.include? 'false') || (type.include? 'true')
 								type = ': Int' if (type.include? '= 0') || (type.include? '= -1')
 							end
-							name = match_var.captures[1].sub('_', ' ').split.map(&:capitalize).join(' ').sub(' ', '')
+							type += ' {' if !type.include? '{'
+							name = match_var.captures[1].split('_').map(&:capitalize).join('_').gsub('_', '')
 							name[0] = name[0].chr.downcase
 							s = match_var.captures[0].sub(match_var.captures[1], name)
-							s = "\t#{s}#{type} {\n"\
+							s = "\t#{s}#{type}\n"\
 								"\t\tget {\n"\
 								"\t\t\treturn #{match_var.captures[1]}\n"\
 								"\t\t}\n"\
 								"\t\tset(v) {\n"\
 								"\t\t\t#{match_var.captures[1]} = v\n"\
 								"\t\t}\n"\
+								"\t}\n"
+							puts s
+							file.puts s
+						# public func name_1(name: Type) -> Type
+						elsif match_func = symbol[:line].match(/(public\s+.*\s*func\s+(?!_)([\w\d_]+))\((.*)\)((\s*->\s?(.+)|))/)
+							next if !match_func.captures[1].include? '_'
+							# puts '--- func: ' + symbol[:line]
+							# p match_func.captures
+							param = ''
+							match_func.captures[2].split(',').each_with_index do |parameters, index|
+								if match_param = parameters.match(/(([\w\d_]+)\s+)?([\w\d_]+):(.*)/)
+									# p match_param.captures
+									if index == 0
+										if match_param.captures[0] == nil
+											param += "#{match_param.captures[2]}, "
+										elsif match_param.captures[0] == '_'
+											param += "#{match_param.captures[2]}: #{match_param.captures[2]}, "
+										else
+											param += "#{match_param.captures[0]}: #{match_param.captures[2]}, "
+										end
+									else
+										if match_param.captures[0] == nil
+											param += "#{match_param.captures[2]}: #{match_param.captures[2]}, "
+										else
+											param += "#{match_param.captures[0]}: #{match_param.captures[2]}, "
+										end
+									end
+									# p index
+									# p param
+								end
+							end
+							param = param[0..-3] if param != ''
+							# p param
+							name = match_func.captures[1].split('_').map(&:capitalize).join('_').gsub('_', '')
+							name[0] = name[0].chr.downcase
+							s = match_func.captures[0].sub(match_func.captures[1], name)
+							type = match_func.captures[3]
+							ret = ''
+							ret = 'return ' if type != ''
+							type = ' {' if type == ''
+							s = "\t#{s}(#{match_func.captures[2]})#{type}\n"\
+								"\t\t#{ret}#{match_func.captures[1]}(#{param})\n"\
 								"\t}\n"
 							puts s
 							file.puts s
@@ -164,16 +209,18 @@ def swift_wrap_underscore(filename, replace)
 			file.puts "}"
 		end
 	end
-	`mv temp.swift #{filename}` if replace
 end
 
+`rm temp.swift`
 if filename[-1] == ?/
 	filenames = Dir["#{filename}/**/*.swift"]
 	puts "Processing '#{filenames}'..."
 	filenames.each do |name|
-		swift_wrap_underscore(name, replace)
+		swift_wrap_underscore(name)
 	end
 else
 	puts "Processing '#{filename}'..."
-	swift_wrap_underscore(filename, replace)
+	swift_wrap_underscore(filename)
 end
+
+`mv temp.swift #{destname}`
